@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "farpost-parser-2"
+version = "0.1.0"
+description = ""
+authors = ["ikalinenko <53858660+ikalinenko@users.noreply.github.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = {extras = ["socks"], version = "^2.28.2"}
+user-agent = "^0.1.10"
+beautifulsoup4 = "^4.11.1"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
