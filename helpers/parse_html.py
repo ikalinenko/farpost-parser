@@ -117,7 +117,7 @@ class Disk:
 def get_links_from_html(content_to_parse: str) -> list[str]:
     """ Returns links to products """
 
-    soup = BeautifulSoup(content_to_parse)
+    soup = BeautifulSoup(content_to_parse, features='html.parser')
 
     links = []
 
@@ -132,7 +132,7 @@ def get_links_from_html(content_to_parse: str) -> list[str]:
 def get_number_of_items(content_to_parse: str) -> tuple[int, int]:
     """ Returns a total number of items and number of pages """
 
-    soup = BeautifulSoup(content_to_parse)
+    soup = BeautifulSoup(content_to_parse, features='html.parser')
     span = soup.find('span', {'id': 'itemsCount_placeholder'})
 
     number_of_items = int(span.get('data-count'))
@@ -142,7 +142,7 @@ def get_number_of_items(content_to_parse: str) -> tuple[int, int]:
 def resolve_item_type(content_to_parse: str) -> ItemType | None:
     """ Returns the type of item """
 
-    soup = BeautifulSoup(content_to_parse)
+    soup = BeautifulSoup(content_to_parse, features='html.parser')
     div = soup.find('div', {'id': 'breadcrumbs'})
 
     if re.search(r'\nДиски\n', div.text):
@@ -188,7 +188,7 @@ def _get_integer_from_string(string: str) -> int:
 def parse_tire(content_to_parse: str) -> Tire:
     """ Returns Tire dataclass after html parsing """
 
-    soup = BeautifulSoup(content_to_parse)
+    soup = BeautifulSoup(content_to_parse, features='html.parser')
 
     title = soup.find('span', {'data-field': 'subject'}).text
     price_for_set = soup.find('span', {'data-field': 'price'}).get('data-bulletin-price')
@@ -235,7 +235,7 @@ def parse_tire(content_to_parse: str) -> Tire:
 def parse_disk(content_to_parse: str) -> Disk:
     """ Returns Disk dataclass after html parsing """
 
-    soup = BeautifulSoup(content_to_parse)
+    soup = BeautifulSoup(content_to_parse, features='html.parser')
 
     title = soup.find('span', {'data-field': 'subject'}).text
     price_for_set = soup.find('span', {'data-field': 'price'}).get('data-bulletin-price')
