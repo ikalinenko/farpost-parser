@@ -96,9 +96,9 @@ class Parser:
             pickle.dump(self._session.cookies, f)
 
     def dump_tires(self) -> None:
-        disks_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_disks.txt')
+        tires_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_disks.xml')
 
-        with open(disks_filename, 'w') as f:
+        with open(tires_filename, 'w') as f:
             f.write(
                 """<?xml version="1.0" encoding="UTF-8"?>
                     <products>
@@ -111,7 +111,7 @@ class Parser:
             f.write('</products>')
 
     def dump_disks(self) -> None:
-        disks_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_disks.txt')
+        disks_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_disks.xml')
 
         with open(disks_filename, 'w') as f:
             f.write(
@@ -217,7 +217,7 @@ class Parser:
         """  """
 
         for i, link in reversed(list(enumerate(self._links))):
-            item_page = math.ceil(i / 50) if i != 0 else 1  # Number of page where current item located
+            item_page = math.ceil(i + 1 / 50)  # Number of page where current item located
             self._user_headers['referer'] = self._base_url + f'?page={item_page}'
             self._script_headers['referer'] = urljoin(self._base_url, link)
 
