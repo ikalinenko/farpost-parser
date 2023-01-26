@@ -1,15 +1,16 @@
 import logging
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+from environs import Env
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(BASE_DIR)
+env = Env()
+env.read_env(os.path.join(BASE_DIR, '.env'))
 
-RUCAPTCHA_API_KEY = os.environ.get('RUCAPTCHA_API_KEY')
-GOOGLE_SITE_KEY = os.environ.get('GOOGLE_SITE_KEY')
+RUCAPTCHA_API_KEY = env.str('RUCAPTCHA_API_KEY')
+GOOGLE_SITE_KEY = env.str('GOOGLE_SITE_KEY')
 
 
 logging.basicConfig(
