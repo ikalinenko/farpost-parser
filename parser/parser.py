@@ -5,10 +5,16 @@ import pickle
 import random
 import requests
 import time
+from bs4 import BeautifulSoup
+from twocaptcha import TwoCaptcha
 from urllib.parse import urlencode, urljoin
 from user_agent import generate_user_agent
-from core.settings import BASE_DIR
-from core.proxy import Proxy, load_proxies
+from core.settings import (
+    BASE_DIR,
+    GOOGLE_SITE_KEY,
+    RUCAPTCHA_API_KEY
+)
+from core.proxy import load_proxies
 from helpers.parse_html import (
     ItemType,
     Tire,
@@ -29,10 +35,11 @@ logger = logging.getLogger(__file__)
 class Parser:
     """ Base class for parsing farpost.ru """
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, from_link: str = None):
         assert isinstance(base_url, str), '`base_url` parameter must be a str instance'
 
         self._base_url = base_url
+        self._from_link = from_link  # Item to start parse
         self._session = requests.Session()
         self._user_agent: str = generate_user_agent(device_type=['smartphone', 'tablet'])
         self._proxies = load_proxies()  # All proxies
@@ -96,7 +103,7 @@ class Parser:
             pickle.dump(self._session.cookies, f)
 
     def dump_tires(self) -> None:
-        tires_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_disks.xml')
+        tires_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_tires.xml')
 
         with open(tires_filename, 'w') as f:
             f.write(
@@ -125,6 +132,39 @@ class Parser:
 
             f.write('</products>')
 
+    def _solve_recaptcha_if_recaptcha(self, response: requests.Response) -> requests.Response:
+        """ Solves recaptcha if it presents in the response """
+
+        soup = BeautifulSoup(response.text, features='html.parser')
+
+        try:
+            hidden_s = soup.find('input', {'name': 's'}).get('value')
+            hidden_t = soup.find('input', {'name': 't'}).get('value')
+
+            logger.debug('Resolving Recaptcha...')
+            solver = TwoCaptcha(RUCAPTCHA_API_KEY)
+
+            try:
+                result = solver.recaptcha(sitekey=GOOGLE_SITE_KEY, url=response.url)
+            except Exception as e:
+                logger.exception(e)
+            else:
+                self._user_headers['referer'] = response.url
+                response = self._session.post(
+                    url=response.url,
+                    headers=self._user_headers,
+                    data={
+                        's': hidden_s,
+                        't': hidden_t,
+                        'g-recaptcha-response': result['code']
+                    },
+                    proxies=self._requests_proxies,
+                    allow_redirects=True
+                )
+                return response
+        except AttributeError:  # No recaptcha in the response
+            return response
+
     def _request(self, url: str, is_script=False) -> requests.Response:
         """ Makes a request to farpost.ru document """
 
@@ -133,11 +173,18 @@ class Parser:
         logger.debug(
             f'url: {url} \n headers: {headers} \n proxies: {self._requests_proxies}'
         )
-        return self._session.get(
-            url=url,
-            proxies=self._requests_proxies,
-            headers=headers
-        )
+
+        try:
+            response = self._session.get(
+                url=url,
+                proxies=self._requests_proxies,
+                headers=headers
+            )
+
+            return self._solve_recaptcha_if_recaptcha(response)
+        except requests.exceptions.ConnectTimeout:
+            time.sleep(5)
+            self._request(url, is_script)
 
     def _mmy_request(self, query_params: dict):
         """ Makes a request to /mmy.txt with query parameters """
@@ -170,8 +217,7 @@ class Parser:
         # Scroll delay
         time.sleep(random.randint(15, 20))
 
-        # for i in range(2, number_of_pages + 1):
-        for i in range(2, 2):
+        for i in range(2, number_of_pages + 1):
             url = self._base_url + f'?_lightweight=1&ajax=1&async=1&city=0&page={i}&status=actual'
             logger.debug(f'Requesting: {url}')
 
@@ -216,12 +262,22 @@ class Parser:
     def parse_catalog_items(self):
         """  """
 
-        for i, link in reversed(list(enumerate(self._links))):
-            item_page = math.ceil(i + 1 / 50)  # Number of page where current item located
+        # If there is an item to start parse
+        if self._from_link:
+            from_item_index = self._links.index(self._from_link)
+            links = self._links[from_item_index:]
+        else:
+            from_item_index = None
+            links = self._links
+
+        total_links = len(self._links)
+
+        for i, link in enumerate(links, start=from_item_index - 1 if from_item_index else 0):
+            item_page = math.ceil((i + 1) / 50)  # Number of page where current item located
             self._user_headers['referer'] = self._base_url + f'?page={item_page}'
             self._script_headers['referer'] = urljoin(self._base_url, link)
 
-            logger.debug(f'Requesting: {link}')
+            logger.debug(f'Requesting: {i + 1} / {total_links} {link}')
             response = self._request('https://www.farpost.ru' + link)
 
             timestamp = int(time.time())
