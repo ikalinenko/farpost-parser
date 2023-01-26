@@ -258,16 +258,19 @@ def parse_disk(content_to_parse: str) -> Disk:
     product_condition = soup.find('span', {'data-field': 'condition'}).text
     diameter = soup.find('span', {'data-field': 'wheelDiameter'}).text
 
-    disk_parameters = soup.find('div', {'data-field': 'discParameters'}).select('div.value')
+    try:
+        disk_parameters = soup.find('div', {'data-field': 'discParameters'}).select('div.value')
+    except AttributeError:
+        disk_parameters = None
 
     try:
         disc_width = disk_parameters[0].text
-    except IndexError:
+    except (IndexError, TypeError):
         disc_width = None
 
     try:
         departure_ET = disk_parameters[1].text
-    except IndexError:
+    except (IndexError, TypeError):
         departure_ET = None
 
     drilling_PCD = soup.find('span', {'data-field': 'wheelPcd'}).text
