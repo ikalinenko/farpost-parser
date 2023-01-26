@@ -272,7 +272,7 @@ class Parser:
 
         total_links = len(self._links)
 
-        for i, link in enumerate(links, start=from_item_index - 1 if from_item_index else 0):
+        for i, link in enumerate(links, start=from_item_index if from_item_index else 0):
             item_page = math.ceil((i + 1) / 50)  # Number of page where current item located
             self._user_headers['referer'] = self._base_url + f'?page={item_page}'
             self._script_headers['referer'] = urljoin(self._base_url, link)

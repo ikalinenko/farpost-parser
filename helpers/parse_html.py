@@ -198,7 +198,10 @@ def parse_tire(content_to_parse: str) -> Tire:
     except AttributeError:
         the_number_of_tires_in_an_indivisible_set = None
 
-    price = str(int(price_for_set) / _get_integer_from_string(the_number_of_tires_in_an_indivisible_set))
+    if the_number_of_tires_in_an_indivisible_set:
+        price = str(int(price_for_set) / _get_integer_from_string(the_number_of_tires_in_an_indivisible_set))
+    else:
+        price = price_for_set
 
     total_sets = soup.find('span', {'data-field': 'quantity'}).text
 
