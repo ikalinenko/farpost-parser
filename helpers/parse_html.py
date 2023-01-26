@@ -255,7 +255,12 @@ def parse_disk(content_to_parse: str) -> Disk:
     price = str(int(price_for_set) / _get_integer_from_string(number_of_discs_included))
 
     number_of_sets = soup.find('span', {'data-field': 'quantity'}).text
-    product_condition = soup.find('span', {'data-field': 'condition'}).text
+
+    try:
+        product_condition = soup.find('span', {'data-field': 'condition'}).text
+    except AttributeError:
+        product_condition = None
+        
     diameter = soup.find('span', {'data-field': 'wheelDiameter'}).text
 
     try:
