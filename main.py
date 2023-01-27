@@ -47,9 +47,14 @@ def run_parsers():
     assert len(proxies) >= len(links), 'Number of proxies in input/proxies.csv ' \
                                        'must be more or equal than number of links in input/links.csv'
 
+    processes = []
     for link, proxy in zip(links, proxies):
         process = Process(target=run_parser, args=(link.id, proxy.id))
+        processes.append(process)
         process.start()
+
+    # Waiting for each process to complete
+    for process in processes:
         process.join()
 
 
