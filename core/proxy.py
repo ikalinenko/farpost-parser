@@ -1,6 +1,6 @@
 import os
 import csv
-from typing import NamedTuple
+from typing import NamedTuple, Generator
 from .settings import BASE_DIR
 
 
@@ -15,8 +15,9 @@ class Proxy(NamedTuple):
 
 
 def load_proxies() -> tuple[Proxy]:
-    filename = os.path.join(BASE_DIR, 'files/proxies.csv')
+    filename = os.path.join(BASE_DIR, 'input/proxies.csv')
     proxies = []
+    proxies_ids = []
 
     with open(filename, 'r') as f:
         reader = csv.reader(f, delimiter=';')
@@ -24,5 +25,8 @@ def load_proxies() -> tuple[Proxy]:
         next(reader)  # Skip title line
         for row in reader:
             proxies.append(Proxy(*row))
+            proxies_ids.append(row[0])
+
+    assert len(proxies_ids) == len(set(proxies_ids)), 'Proxies in input/proxies.csv must have a unique ids'
 
     return tuple(proxies)

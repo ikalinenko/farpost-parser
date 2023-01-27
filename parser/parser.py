@@ -14,7 +14,7 @@ from core.settings import (
     GOOGLE_SITE_KEY,
     RUCAPTCHA_API_KEY
 )
-from core.proxy import load_proxies
+from core.proxy import Proxy
 from helpers.parse_html import (
     ItemType,
     Tire,
@@ -35,22 +35,23 @@ logger = logging.getLogger(__file__)
 class Parser:
     """ Base class for parsing farpost.ru """
 
-    def __init__(self, base_url: str, from_link: str = None):
+    def __init__(self, _id: str, base_url: str, proxy: Proxy, from_link: str = None):
+        assert isinstance(_id, str), '`_id` parameter must be a str instance'
         assert isinstance(base_url, str), '`base_url` parameter must be a str instance'
+        assert isinstance(proxy, Proxy), '`proxy` parameter must be a Proxy instance'
 
+        self._id = _id
         self._base_url = base_url
         self._from_link = from_link  # Item to start parse
         self._session = requests.Session()
         self._user_agent: str = generate_user_agent(device_type=['smartphone', 'tablet'])
-        self._proxies = load_proxies()  # All proxies
-        self._proxy = self._proxies[0]  # Current proxy
 
         # Dictionary for further using with requests
-        self._requests_proxies = {
+        self._proxies = {
             'http':
-                f'socks5://{self._proxy.username}:{self._proxy.password}@{self._proxy.ip}:{self._proxy.port_socks5}',
+                f'socks5://{proxy.username}:{proxy.password}@{proxy.ip}:{proxy.port_socks5}',
             'https':
-                f'socks5://{self._proxy.username}:{self._proxy.password}@{self._proxy.ip}:{self._proxy.port_socks5}'
+                f'socks5://{proxy.username}:{proxy.password}@{proxy.ip}:{proxy.port_socks5}'
         }
 
         # Headers to send while imitating a user behavior
@@ -86,8 +87,51 @@ class Parser:
         self._tires: list[Tire] = []  # Tires parsed
         self._disks: list[Disk] = []  # Disks parsed
 
-    def _load_session_cookies(self) -> None:
-        session_cookies_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_cookies')
+    def __enter__(self):
+        self._load_session_cookies_if_exists()
+        self._load_catalog_links()
+        self._load_disks_from_tmp_if_exists()
+        self._load_tires_from_tmp_if_exists()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._dump_session_cookies()
+
+        if exc_type:
+            logger.exception(exc_val)
+            self._dump_disks_to_tmp()  # Temporary disks saving
+            self._dump_tires_to_tmp()  # Temporary tires saving
+        else:
+            self._dump_disks()
+            self._dump_tires()
+            os.rmdir(os.path.join(BASE_DIR, f'tmp/parser_{self._id}'))
+
+    def _load_catalog_links(self) -> None:
+        """ Loads item links from catalog to parse item """
+
+        catalog_links_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/links')
+
+        if os.path.exists(catalog_links_filename):
+            with open(catalog_links_filename, 'rb') as f:
+                self._links = pickle.load(f)
+        else:
+            self._parse_catalog_links()
+            self._dump_catalog_links()
+
+    def _dump_catalog_links(self) -> None:
+        catalog_links_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/links')
+
+        if not os.path.exists(os.path.join(BASE_DIR, f'tmp/parser_{self._id}/')):
+            os.mkdir(os.path.join(BASE_DIR, f'tmp/parser_{self._id}/'))
+
+        if len(self._links):
+            with open(catalog_links_filename, 'wb') as f:
+                pickle.dump(self._links, f)
+
+    def _load_session_cookies_if_exists(self) -> None:
+        """ Loads cookies for next session if they exists """
+
+        session_cookies_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/cookies')
 
         if os.path.exists(session_cookies_filename):
             with open(session_cookies_filename, 'rb') as f:
@@ -96,14 +140,53 @@ class Parser:
             self._session.cookies.update(cookies)
 
     def _dump_session_cookies(self) -> None:
-        session_cookies_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_cookies')
+        session_cookies_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/cookies')
 
-        with open(session_cookies_filename, 'rb') as f:
-            f.read()
+        with open(session_cookies_filename, 'wb') as f:
             pickle.dump(self._session.cookies, f)
 
-    def dump_tires(self) -> None:
-        tires_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_tires.xml')
+    def _load_tires_from_tmp_if_exists(self) -> None:
+        """ Loads tires from temporary file if it exists """
+
+        tmp_tires_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/tires')
+
+        if os.path.exists(tmp_tires_filename):
+            with open(tmp_tires_filename, 'rb') as f:
+                tires = pickle.load(f)
+                self._tires = [Tire.from_dict(_dict) for _dict in tires]
+
+    def _load_disks_from_tmp_if_exists(self) -> None:
+        """ Loads disks from temporary file if it exists """
+
+        tmp_disks_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/disks')
+
+        if os.path.exists(tmp_disks_filename):
+            with open(tmp_disks_filename, 'rb') as f:
+                disks = pickle.load(f)
+                self._disks = [Disk.from_dict(_dict) for _dict in disks]
+
+    def _dump_tires_to_tmp(self) -> None:
+        """ Temporary dumps tires for further using after exception """
+
+        tmp_tires_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/tires')
+
+        with open(tmp_tires_filename, 'wb') as f:
+            tires = [tire.__dict__() for tire in self._tires]
+            pickle.dump(tires, f)
+
+    def _dump_disks_to_tmp(self) -> None:
+        """ Temporary dumps disks for further using after exception """
+
+        tmp_disks_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/disks')
+
+        with open(tmp_disks_filename, 'wb') as f:
+            disks = [disk.__dict__() for disk in self._disks]
+            pickle.dump(disks, f)
+
+    def _dump_tires(self) -> None:
+        """ Dumps tires to xml """
+
+        tires_filename = os.path.join(BASE_DIR, f'output/{self._id}_tires.xml')
 
         with open(tires_filename, 'w') as f:
             f.write(
@@ -117,8 +200,10 @@ class Parser:
 
             f.write('</products>')
 
-    def dump_disks(self) -> None:
-        disks_filename = os.path.join(BASE_DIR, f'tmp/{self._proxy.id}_disks.xml')
+    def _dump_disks(self) -> None:
+        """ Dumps disks to xml """
+
+        disks_filename = os.path.join(BASE_DIR, f'output/{self._id}_disks.xml')
 
         with open(disks_filename, 'w') as f:
             f.write(
@@ -141,7 +226,7 @@ class Parser:
             hidden_s = soup.find('input', {'name': 's'}).get('value')
             hidden_t = soup.find('input', {'name': 't'}).get('value')
 
-            logger.debug('Resolving Recaptcha...')
+            logger.debug(f'Parser {self._id} — Resolving Recaptcha...')
             solver = TwoCaptcha(RUCAPTCHA_API_KEY)
 
             try:
@@ -158,7 +243,7 @@ class Parser:
                         't': hidden_t,
                         'g-recaptcha-response': result['code']
                     },
-                    proxies=self._requests_proxies,
+                    proxies=self._proxies,
                     allow_redirects=True
                 )
                 return response
@@ -171,13 +256,13 @@ class Parser:
         headers = self._script_headers if is_script else self._user_headers
 
         logger.debug(
-            f'url: {url} \n headers: {headers} \n proxies: {self._requests_proxies}'
+            f'Parser {self._id} — url {url} \n headers: {headers} \n proxies: {self._proxies}'
         )
 
         try:
             response = self._session.get(
                 url=url,
-                proxies=self._requests_proxies,
+                proxies=self._proxies,
                 headers=headers
             )
 
@@ -192,17 +277,15 @@ class Parser:
         url = 'https://www.farpost.ru/mmy.txt?' + urlencode(query_params)
         self._request(url, is_script=True)
 
-    def get_catalog_links(self):
-        """ Returns all links in a catalog (base_url) """
+    def _parse_catalog_links(self) -> None:
+        """ Parses all links from catalog (base_url) """
 
-        self._load_session_cookies()
-
-        logger.debug(f'Requesting: {self._base_url}')
+        logger.debug(f'Parser {self._id} — Requesting: {self._base_url}')
 
         # First user request for page in browser
         response = self._request(url=self._base_url)
 
-        logger.debug(f'Response: {response.text}')
+        logger.debug(f'Parser {self._id} — Response: {response.text}')
 
         # Extract links from html
         self._links.extend(
@@ -210,20 +293,20 @@ class Parser:
         )
 
         number_of_items, number_of_pages = get_number_of_items(response.text)
-        logger.debug(f'Items: {number_of_items}, pages: {number_of_pages}')
+        logger.debug(f'Parser {self._id} — Items: {number_of_items}, pages: {number_of_pages}')
 
-        logger.debug('Scroll delay')
+        logger.debug(f'Parser {self._id} — Scroll delay')
 
         # Scroll delay
-        time.sleep(random.randint(15, 20))
+        time.sleep(random.randint(5, 10))
 
         for i in range(2, number_of_pages + 1):
             url = self._base_url + f'?_lightweight=1&ajax=1&async=1&city=0&page={i}&status=actual'
-            logger.debug(f'Requesting: {url}')
+            logger.debug(f'Parser {self._id} — Requesting: {url}')
 
             response = self._request(url, is_script=True)
 
-            logger.debug(f'Response: {response.text}')
+            logger.debug(f'Parser {self._id} — Response: {response.text}')
 
             # Extract links from json
             self._links.extend(
@@ -232,7 +315,6 @@ class Parser:
 
             timestamp = int(time.time())
 
-            logger.debug('Requesting mmy...')
             self._mmy_request(
                 query_params={
                     'action': 'viewdir_ppc_good_show__in_0',
@@ -243,7 +325,6 @@ class Parser:
 
             time.sleep(1)
 
-            logger.debug('Requesting mmy...')
             self._mmy_request(
                 query_params={
                     'action': 'page_clicked',
@@ -254,12 +335,12 @@ class Parser:
 
             self._script_headers['referer'] = self._base_url + f'?page={i}'
 
-            logger.debug('Scroll delay')
+            logger.debug(f'Parser {self._id} — Scroll delay')
 
             # Scroll delay
-            time.sleep(random.randint(15, 20))
+            time.sleep(random.randint(5, 10))
 
-    def parse_catalog_items(self):
+    def _parse_catalog_items(self):
         """  """
 
         # If there is an item to start parse
@@ -277,14 +358,14 @@ class Parser:
             self._user_headers['referer'] = self._base_url + f'?page={item_page}'
             self._script_headers['referer'] = urljoin(self._base_url, link)
 
-            logger.debug(f'Requesting: {i + 1} / {total_links} {link}')
+            logger.debug(f'Parser {self._id} — Requesting: {i + 1} / {total_links} {link}')
             response = self._request('https://www.farpost.ru' + link)
 
             timestamp = int(time.time())
             item_id = get_item_id(link)
             item_type = resolve_item_type(response.text)
 
-            logger.debug(f'Item id: {item_id}, item type: {item_type}, item page: {item_page}')
+            logger.debug(f'Parser {self._id} — Item id: {item_id}, item type: {item_type}, item page: {item_page}')
 
             query_params = {
                 'action': 'viewdir_item_click',
@@ -317,19 +398,22 @@ class Parser:
             match item_type:
                 case ItemType.TIRE:
                     tire = parse_tire(response.text)
-                    logger.debug(f'Parsed tire: {tire}')
+                    logger.debug(f'Parser {self._id} — Parsed tire: {tire}')
                     self._tires.append(tire)
 
                 case ItemType.DISK:
                     disk = parse_disk(response.text)
-                    logger.debug(f'Parsed disk: {disk}')
+                    logger.debug(f'Parser {self._id} — Parsed disk: {disk}')
                     self._disks.append(disk)
                 case _:
-                    logger.debug('Not a disk or tire.')
+                    logger.debug(f'Parser {self._id} — Not a disk or a tire.')
 
             if bool(random.getrandbits(1)):  # Random choice whether to scroll page to bottom
+                logger.debug(f'Parser {self._id} — Scroll delay')
+
                 # Scroll delay
-                time.sleep(random.randint(1, 10))
+                time.sleep(random.randint(1, 5))
+
                 self._mmy_request(
                     query_params={
                         'action': 'viewbull_similar_block_bottom__show',
@@ -338,6 +422,12 @@ class Parser:
                     }
                 )
 
-            logging.debug('Delay after product watching.')
+            logging.debug(f'Parser {self._id} — Delay after product watching.')
+
             # Delay after product watching
-            time.sleep(random.randint(1, 10))
+            time.sleep(random.randint(1, 5))
+
+    def run(self):
+        """ Starts parser """
+
+        self._parse_catalog_items()

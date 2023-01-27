@@ -3,6 +3,7 @@ __pycache__/
 .DS_Store
 .idea/
 tmp/
-files/
 *.log
 *.env
+input/
+output/

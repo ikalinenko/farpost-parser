@@ -48,6 +48,24 @@ class Tire:
             'tireType': self.tire_type
         }
 
+    @classmethod
+    def from_dict(cls, _dict: dict):
+        return cls(
+            title=_dict['title'],
+            price=_dict['price'],
+            the_number_of_tires_in_an_indivisible_set=_dict['theNumberOfTiresInAnIndivisibleSet'],
+            total_sets=_dict['totalSets'],
+            tire_year=_dict['tireYear'],
+            tread=_dict['tread'],
+            product_condition=_dict['productCondition'],
+            landing_diameter=_dict['landingDiameter'],
+            profile_width=_dict['profileWidth'],
+            profile_height=_dict['profileHeight'],
+            frame=_dict['frame'],
+            availability_of_goods=_dict['availabilityOfGoods'],
+            tire_type=_dict['tireType']
+        )
+
     def to_xml(self):
         return f"""<Tire>
             <title>{self.title}</title>
@@ -96,6 +114,23 @@ class Disk:
             'CHDiameterDIA': self.CH_diameter_DIA,
             'ProductAvailability': self.product_availability
         }
+
+    @classmethod
+    def from_dict(cls, _dict: dict):
+        return cls(
+            title=_dict['title'],
+            price=_dict['price'],
+            number_of_discs_included=_dict['NumberOfDiscsIncluded'],
+            number_of_sets=_dict['NumberOfSets'],
+            product_condition=_dict['ProductCondition'],
+            diameter=_dict['Diameter'],
+            disc_width=_dict['DiscWidth'],
+            departure_ET=_dict['DepartureET'],
+            drilling_PCD=_dict['DrillingPCD'],
+            type_of=_dict['TypeOf'],
+            CH_diameter_DIA=_dict['CHDiameterDIA'],
+            product_availability=_dict['ProductAvailability']
+        )
 
     def to_xml(self):
         return f"""<Disk>
