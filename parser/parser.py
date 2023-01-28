@@ -98,7 +98,7 @@ class Parser:
         self._dump_session_cookies()
 
         if exc_type:
-            logger.exception(exc_val)
+            logger.exception(f'Parser {self._id} — {exc_val}')
             self._dump_disks_to_tmp()  # Temporary disks saving
             self._dump_tires_to_tmp()  # Temporary tires saving
         else:
@@ -232,7 +232,7 @@ class Parser:
             try:
                 result = solver.recaptcha(sitekey=GOOGLE_SITE_KEY, url=response.url)
             except Exception as e:
-                logger.exception(e)
+                logger.exception(f'Parser {self._id} — {e}')
             else:
                 self._user_headers['referer'] = response.url
                 response = self._session.post(
@@ -246,7 +246,7 @@ class Parser:
                     proxies=self._proxies,
                     allow_redirects=True
                 )
-                return self._solve_recaptcha_if_recaptcha(response)
+                return response
         except AttributeError:  # No recaptcha in the response
             return response
 
