@@ -284,10 +284,21 @@ def parse_disk(content_to_parse: str) -> Disk:
     soup = BeautifulSoup(content_to_parse, features='html.parser')
 
     title = soup.find('span', {'data-field': 'subject'}).text
-    price_for_set = soup.find('span', {'data-field': 'price'}).get('data-bulletin-price')
-    number_of_discs_included = soup.find('span', {'data-field': 'inSetQuantity'}).text
 
-    price = str(int(price_for_set) / _get_integer_from_string(number_of_discs_included))
+    try:
+        price_for_set = soup.find('span', {'data-field': 'price'}).get('data-bulletin-price')
+    except AttributeError:
+        price_for_set = None
+
+    try:
+        number_of_discs_included = soup.find('span', {'data-field': 'inSetQuantity'}).text
+    except AttributeError:
+        number_of_discs_included = None
+
+    if price_for_set and number_of_discs_included:
+        price = str(int(price_for_set) / _get_integer_from_string(number_of_discs_included))
+    else:
+        price = price_for_set
 
     number_of_sets = soup.find('span', {'data-field': 'quantity'}).text
 

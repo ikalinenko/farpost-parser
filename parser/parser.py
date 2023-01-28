@@ -5,6 +5,7 @@ import pickle
 import random
 import requests
 import time
+from shutil import rmtree
 from bs4 import BeautifulSoup
 from twocaptcha import TwoCaptcha
 from urllib.parse import urlencode, urljoin
@@ -104,7 +105,7 @@ class Parser:
         else:
             self._dump_disks()
             self._dump_tires()
-            os.rmdir(os.path.join(BASE_DIR, f'tmp/parser_{self._id}'))
+            rmtree(os.path.join(BASE_DIR, f'tmp/parser_{self._id}'))
 
     def _load_catalog_links(self) -> None:
         """ Loads item links from catalog to parse item """
