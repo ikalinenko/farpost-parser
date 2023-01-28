@@ -325,7 +325,10 @@ def parse_disk(content_to_parse: str) -> Disk:
     except AttributeError:
         CH_diameter_DIA = None
 
-    product_availability = soup.find('span', {'data-field': 'goodPresentState'}).text
+    try:
+        product_availability = soup.find('span', {'data-field': 'goodPresentState'}).text
+    except AttributeError:
+        product_availability = None
 
     return Disk(
         title=_process_parsed_string(title),

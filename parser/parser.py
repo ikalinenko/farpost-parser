@@ -298,7 +298,7 @@ class Parser:
         logger.debug(f'Parser {self._id} — Scroll delay')
 
         # Scroll delay
-        time.sleep(random.randint(5, 10))
+        time.sleep(random.randint(15, 20))
 
         for i in range(2, number_of_pages + 1):
             url = self._base_url + f'?_lightweight=1&ajax=1&async=1&city=0&page={i}&status=actual'
@@ -338,7 +338,7 @@ class Parser:
             logger.debug(f'Parser {self._id} — Scroll delay')
 
             # Scroll delay
-            time.sleep(random.randint(5, 10))
+            time.sleep(random.randint(15, 20))
 
     def _parse_catalog_items(self):
         """  """
@@ -367,15 +367,19 @@ class Parser:
 
             logger.debug(f'Parser {self._id} — Item id: {item_id}, item type: {item_type}, item page: {item_page}')
 
-            query_params = {
-                'action': 'viewdir_item_click',
-                'briefType': 'inline',
-                'searchPos': i + 1,
-                'accuracy': 'exact',
-                'bullId': item_id,
-                '_': timestamp,
-                **get_item_params_for_mmy_request(response.text)
-            }
+            try:
+                query_params = {
+                    'action': 'viewdir_item_click',
+                    'briefType': 'inline',
+                    'searchPos': i + 1,
+                    'accuracy': 'exact',
+                    'bullId': item_id,
+                    '_': timestamp,
+                    **get_item_params_for_mmy_request(response.text)
+                }
+            except IndexError:  # No item on the requested page (has been deleted or replaced)
+                continue
+
             self._mmy_request(query_params)
 
             time.sleep(1)
@@ -412,7 +416,7 @@ class Parser:
                 logger.debug(f'Parser {self._id} — Scroll delay')
 
                 # Scroll delay
-                time.sleep(random.randint(1, 5))
+                time.sleep(random.randint(1, 10))
 
                 self._mmy_request(
                     query_params={
@@ -425,7 +429,7 @@ class Parser:
             logging.debug(f'Parser {self._id} — Delay after product watching.')
 
             # Delay after product watching
-            time.sleep(random.randint(1, 5))
+            time.sleep(random.randint(1, 10))
 
     def run(self):
         """ Starts parser """
