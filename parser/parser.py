@@ -246,7 +246,7 @@ class Parser:
                     proxies=self._proxies,
                     allow_redirects=True
                 )
-                return response
+                return self._solve_recaptcha_if_recaptcha(response)
         except AttributeError:  # No recaptcha in the response
             return response
 
