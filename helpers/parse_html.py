@@ -314,7 +314,11 @@ def parse_disk(content_to_parse: str) -> Disk:
         departure_ET = None
 
     drilling_PCD = soup.find('span', {'data-field': 'wheelPcd'}).text
-    type_of = soup.find('span', {'data-field': 'diskType'}).text
+
+    try:
+        type_of = soup.find('span', {'data-field': 'diskType'}).text
+    except AttributeError:
+        type_of = None
 
     try:
         CH_diameter_DIA = soup.find('span', {'data-field': 'diskHoleDiameter'}).text
