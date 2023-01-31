@@ -311,8 +311,10 @@ class Parser:
             return get_captcha_hidden_inputs(response.text)
 
         def resolve():
+            nonlocal response
+            
             hidden_s, hidden_t, image_url = hidden_inputs()
-            return self._solve_captcha(url=response.url, hidden_s=hidden_s, hidden_t=hidden_t, image_url=image_url)
+            response = self._solve_captcha(url=response.url, hidden_s=hidden_s, hidden_t=hidden_t, image_url=image_url)
 
         def inner() -> requests.Response:
             nonlocal response, previous_captcha_type
