@@ -15,6 +15,11 @@ class ItemType(Enum):
     DISK = 1
 
 
+class CaptchaType(Enum):
+    RECAPTCHA = 0
+    NORMAl = 1
+
+
 @dataclass
 class Tire:
     title: str
@@ -355,3 +360,44 @@ def parse_disk(content_to_parse: str) -> Disk:
         CH_diameter_DIA=_process_parsed_string(CH_diameter_DIA),
         product_availability=_process_parsed_string(product_availability)
     )
+
+
+def is_captcha_in_response(content_to_parse: str) -> bool:
+    """ Returns True if captcha is in the response, otherwise returns False """
+
+    soup = BeautifulSoup(content_to_parse, features='html.parser')
+
+    try:
+        _ = soup.find('input', {'name': 's'}).get('value')
+        _ = soup.find('input', {'name': 't'}).get('value')
+
+        return True
+    except AttributeError:
+        return False
+
+
+def resolve_captcha_type(content_to_parse: str) -> CaptchaType:
+    """ Returns CaptchaType in dependency on captcha presented in the response """
+
+    soup = BeautifulSoup(content_to_parse, features='html.parser')
+
+    try:
+        _ = soup.find('img', {'alt': 'Изображение для проверки'}).get('src')
+        return CaptchaType.NORMAl
+    except AttributeError:
+        return CaptchaType.RECAPTCHA
+
+
+def get_captcha_hidden_inputs(content_to_parse: str) -> tuple[str, str, str | None]:
+    """ Returns hidden_s, hidden_t inputs and image_url to submit and solve captcha """
+
+    soup = BeautifulSoup(content_to_parse, features='html.parser')
+
+    hidden_s = soup.find('input', {'name': 's'}).get('value')
+    hidden_t = soup.find('input', {'name': 't'}).get('value')
+    try:
+        image_url = soup.find('img', {'alt': 'Изображение для проверки'}).get('src')
+    except AttributeError:
+        image_url = None
+
+    return hidden_s, hidden_t, image_url

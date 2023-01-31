@@ -5,6 +5,7 @@ import pickle
 import random
 import requests
 import time
+from typing import Callable
 from shutil import rmtree
 from bs4 import BeautifulSoup
 from twocaptcha import TwoCaptcha
@@ -15,9 +16,10 @@ from core.settings import (
     GOOGLE_SITE_KEY,
     RUCAPTCHA_API_KEY
 )
-from core.proxy import Proxy
+from core.proxy import Proxy, load_proxies
 from helpers.parse_html import (
     ItemType,
+    CaptchaType,
     Tire,
     Disk,
     get_links_from_html,
@@ -26,7 +28,10 @@ from helpers.parse_html import (
     get_item_id,
     get_item_params_for_mmy_request,
     parse_tire,
-    parse_disk
+    parse_disk,
+    is_captcha_in_response,
+    resolve_captcha_type,
+    get_captcha_hidden_inputs
 )
 
 
@@ -46,6 +51,7 @@ class Parser:
         self._from_link = from_link  # Item to start parse
         self._session = requests.Session()
         self._user_agent: str = generate_user_agent(device_type=['smartphone', 'tablet'])
+        self._proxy = proxy
 
         # Dictionary for further using with requests
         self._proxies = {
@@ -89,30 +95,56 @@ class Parser:
         self._disks: list[Disk] = []  # Disks parsed
 
     def __enter__(self):
-        self._load_session_cookies_if_exists()
+        # self._load_session_cookies_if_exists()
         self._load_catalog_links()
         self._load_disks_from_tmp_if_exists()
         self._load_tires_from_tmp_if_exists()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._dump_session_cookies()
+        # self._dump_session_cookies()
+        self._session.close()
 
         if exc_type:
             logger.exception(f'Parser {self._id} — {exc_val}')
             self._dump_disks_to_tmp()  # Temporary disks saving
             self._dump_tires_to_tmp()  # Temporary tires saving
         else:
-            self._dump_disks()
-            self._dump_tires()
+            self._save_disks_to_xml()
+            self._save_tires_to_xml()
             rmtree(os.path.join(BASE_DIR, f'tmp/parser_{self._id}'))
 
+    def _refresh_session(self) -> None:
+        """ Closes current session and starts the new one """
+
+        logger.debug(f'Parser {self._id} — Refreshing session...')
+
+        self._session.close()
+        self._session = requests.Session()
+
+    def _change_proxy(self) -> None:
+        """ Changes current proxy to the new one """
+
+        logger.debug(f'Parser {self._id} — Changing proxy...')
+
+        proxies = load_proxies()
+        filtered = list(filter(lambda proxy: proxy != self._proxy, proxies))
+
+        self._proxy = random.choice(filtered)
+        self._proxies = self._proxies = {
+            'http':
+                f'socks5://{self._proxy.username}:{self._proxy.password}@{self._proxy.ip}:{self._proxy.port_socks5}',
+            'https':
+                f'socks5://{self._proxy.username}:{self._proxy.password}@{self._proxy.ip}:{self._proxy.port_socks5}'
+        }
+
     def _load_catalog_links(self) -> None:
-        """ Loads item links from catalog to parse item """
+        """ Loads item links from file to parse items """
 
         catalog_links_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/links')
 
         if os.path.exists(catalog_links_filename):
+            logger.debug(f'Parser {self._id} — loading catalog links...')
             with open(catalog_links_filename, 'rb') as f:
                 self._links = pickle.load(f)
         else:
@@ -120,31 +152,34 @@ class Parser:
             self._dump_catalog_links()
 
     def _dump_catalog_links(self) -> None:
+        """ Dumping item links into file to load them in next launch """
+
         catalog_links_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/links')
 
         if not os.path.exists(os.path.join(BASE_DIR, f'tmp/parser_{self._id}/')):
             os.mkdir(os.path.join(BASE_DIR, f'tmp/parser_{self._id}/'))
 
         if len(self._links):
+            logger.debug(f'Parser {self._id} — Dumping catalog links...')
             with open(catalog_links_filename, 'wb') as f:
                 pickle.dump(self._links, f)
 
-    def _load_session_cookies_if_exists(self) -> None:
-        """ Loads cookies for next session if they exists """
-
-        session_cookies_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/cookies')
-
-        if os.path.exists(session_cookies_filename):
-            with open(session_cookies_filename, 'rb') as f:
-                cookies = pickle.load(f)
-
-            self._session.cookies.update(cookies)
-
-    def _dump_session_cookies(self) -> None:
-        session_cookies_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/cookies')
-
-        with open(session_cookies_filename, 'wb') as f:
-            pickle.dump(self._session.cookies, f)
+    # def _load_session_cookies_if_exists(self) -> None:
+    #     """ Loads cookies for next session if they exists """
+    #
+    #     session_cookies_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/cookies')
+    #
+    #     if os.path.exists(session_cookies_filename):
+    #         with open(session_cookies_filename, 'rb') as f:
+    #             cookies = pickle.load(f)
+    #
+    #         self._session.cookies.update(cookies)
+    #
+    # def _dump_session_cookies(self) -> None:
+    #     session_cookies_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/cookies')
+    #
+    #     with open(session_cookies_filename, 'wb') as f:
+    #         pickle.dump(self._session.cookies, f)
 
     def _load_tires_from_tmp_if_exists(self) -> None:
         """ Loads tires from temporary file if it exists """
@@ -152,6 +187,7 @@ class Parser:
         tmp_tires_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/tires')
 
         if os.path.exists(tmp_tires_filename):
+            logger.debug(f'Parser {self._id} — Loading tires from file...')
             with open(tmp_tires_filename, 'rb') as f:
                 tires = pickle.load(f)
                 self._tires = [Tire.from_dict(_dict) for _dict in tires]
@@ -162,12 +198,15 @@ class Parser:
         tmp_disks_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/disks')
 
         if os.path.exists(tmp_disks_filename):
+            logger.debug(f'Parser {self._id} — Loading disks from file...')
             with open(tmp_disks_filename, 'rb') as f:
                 disks = pickle.load(f)
                 self._disks = [Disk.from_dict(_dict) for _dict in disks]
 
     def _dump_tires_to_tmp(self) -> None:
         """ Temporary dumps tires for further using after exception """
+
+        logger.debug(f'Parser {self._id} — Dumping tires into file...')
 
         tmp_tires_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/tires')
 
@@ -178,14 +217,18 @@ class Parser:
     def _dump_disks_to_tmp(self) -> None:
         """ Temporary dumps disks for further using after exception """
 
+        logger.debug(f'Parser {self._id} — Dumping disks into file...')
+
         tmp_disks_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/disks')
 
         with open(tmp_disks_filename, 'wb') as f:
             disks = [disk.__dict__() for disk in self._disks]
             pickle.dump(disks, f)
 
-    def _dump_tires(self) -> None:
-        """ Dumps tires to xml """
+    def _save_tires_to_xml(self) -> None:
+        """ Saves tires to xml output file """
+
+        logger.debug(f'Parser {self._id} — Saving tires into output xml file...')
 
         tires_filename = os.path.join(BASE_DIR, f'output/{self._id}_tires.xml')
 
@@ -201,8 +244,10 @@ class Parser:
 
             f.write('</products>')
 
-    def _dump_disks(self) -> None:
-        """ Dumps disks to xml """
+    def _save_disks_to_xml(self) -> None:
+        """ Saves disks to xml output file """
+
+        logger.debug(f'Parser {self._id} — Saving disks into output xml file...')
 
         disks_filename = os.path.join(BASE_DIR, f'output/{self._id}_disks.xml')
 
@@ -218,38 +263,95 @@ class Parser:
 
             f.write('</products>')
 
-    def _solve_recaptcha_if_recaptcha(self, response: requests.Response) -> requests.Response:
-        """ Solves recaptcha if it presents in the response """
+    def _solve_captcha(self, url: str, hidden_s: str, hidden_t: str, image_url: str | None) -> requests.Response:
+        """
+            Solves captcha.
+            Args:
+                url: URL of the page where captcha is located
+                hidden_s: input[type=hidden, name=s] from the form on the page where captcha is located
+                hidden_t: input[type=hidden, name=t] from the form on the page where captcha is located
+                image_url: Optional. The URL of captcha image to solve captcha if captcha type is CaptchaType.NORMAL
+        """
 
-        soup = BeautifulSoup(response.text, features='html.parser')
+        solver = TwoCaptcha(RUCAPTCHA_API_KEY)
 
         try:
-            hidden_s = soup.find('input', {'name': 's'}).get('value')
-            hidden_t = soup.find('input', {'name': 't'}).get('value')
-
-            logger.debug(f'Parser {self._id} — Resolving Recaptcha...')
-            solver = TwoCaptcha(RUCAPTCHA_API_KEY)
-
-            try:
-                result = solver.recaptcha(sitekey=GOOGLE_SITE_KEY, url=response.url)
-            except Exception as e:
-                logger.exception(f'Parser {self._id} — {e}')
-            else:
-                self._user_headers['referer'] = response.url
-                response = self._session.post(
-                    url=response.url,
-                    headers=self._user_headers,
-                    data={
-                        's': hidden_s,
-                        't': hidden_t,
-                        'g-recaptcha-response': result['code']
-                    },
-                    proxies=self._proxies,
-                    allow_redirects=True
-                )
-                return response
-        except AttributeError:  # No recaptcha in the response
+            result = solver.recaptcha(sitekey=GOOGLE_SITE_KEY, url=url) \
+                if image_url is None else solver.normal(image_url)
+        except Exception as e:
+            logger.exception(f'Parser {self._id} — {e}')
+        else:
+            self._user_headers['referer'] = url
+            response = self._session.post(
+                url=url,
+                headers=self._user_headers,
+                data={
+                    's': hidden_s,
+                    't': hidden_t,
+                    'g-recaptcha-response': result['code']
+                },
+                proxies=self._proxies,
+                allow_redirects=True
+            )
             return response
+
+    def _solve_captcha_if_captcha_in_response(self, response: requests.Response) -> Callable:
+        """ Solves recaptcha if it presents in the response """
+
+        requested_url = response.request.url  # The requested URL of the link to parse
+        previous_captcha_type: CaptchaType = None
+
+        def is_captcha() -> bool:
+            return is_captcha_in_response(response.text)
+
+        def captcha_type() -> CaptchaType:
+            return resolve_captcha_type(response.text)
+
+        def hidden_inputs() -> tuple[str, str, str | None]:
+            return get_captcha_hidden_inputs(response.text)
+
+        def resolve():
+            hidden_s, hidden_t, image_url = hidden_inputs()
+            return self._solve_captcha(url=response.url, hidden_s=hidden_s, hidden_t=hidden_t, image_url=image_url)
+
+        def inner() -> requests.Response:
+            nonlocal response, previous_captcha_type
+
+            if not is_captcha():
+                logger.debug(f'Parser {self._id} — No captcha in the response')
+                return response
+
+            logger.debug(f'Parser {self._id} — Solving first captcha... Captcha type {captcha_type()}')
+            resolve()
+
+            if not is_captcha():
+                logger.debug(f'Parser {self._id} — Captcha solved after 1st attempt')
+                return response
+
+            if previous_captcha_type:
+                condition = (not previous_captcha_type.value) and captcha_type().value
+
+                if condition:  # Solve NORMAL captcha next
+                    logger.debug(f'Parser {self._id} — Requesting captcha with type NORMAL')
+                    response = self._session.get(response.url + '&f=1')
+                    logger.debug(f'Parser {self._id} — Solving second captcha... Captcha type {captcha_type()}')
+                    resolve()
+                else:  # Solve RECAPTCHA next
+                    logger.debug(f'Parser {self._id} — Solving second captcha... Captcha type {captcha_type()}')
+                    resolve()
+            else:
+                previous_captcha_type = captcha_type()
+
+            if not is_captcha():
+                logger.debug(f'Parser {self._id} — Captcha solved after 2nd attempt')
+                return response
+
+            self._refresh_session()
+            self._change_proxy()
+
+            return self._request(requested_url)
+
+        return inner
 
     def _request(self, url: str, is_script=False) -> requests.Response:
         """ Makes a request to farpost.ru document """
@@ -267,7 +369,7 @@ class Parser:
                 headers=headers
             )
 
-            return self._solve_recaptcha_if_recaptcha(response)
+            return self._solve_captcha_if_captcha_in_response(response)()
         except requests.exceptions.ConnectTimeout:
             time.sleep(5)
             self._request(url, is_script)
@@ -342,7 +444,7 @@ class Parser:
             time.sleep(random.randint(15, 20))
 
     def _parse_catalog_items(self):
-        """  """
+        """ Parses disks and tires from each link in self._links """
 
         # If there is an item to start parse
         if self._from_link:
