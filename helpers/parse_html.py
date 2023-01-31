@@ -397,6 +397,7 @@ def get_captcha_hidden_inputs(content_to_parse: str) -> tuple[str, str, str | No
     hidden_t = soup.find('input', {'name': 't'}).get('value')
     try:
         image_url = soup.find('img', {'alt': 'Изображение для проверки'}).get('src')
+        image_url = 'https://farpost.ru/verify' + image_url
     except AttributeError:
         image_url = None
 
