@@ -10,6 +10,10 @@ from parser import Parser
 logger = logging.getLogger(__file__)
 
 
+PROXIES = load_proxies()
+LINKS = load_links()
+
+
 def run_parser(link_id: str, proxy_id: str):
     """
         Starts a single parser for link with id=link_id from input/links.csv
@@ -17,15 +21,13 @@ def run_parser(link_id: str, proxy_id: str):
     """
 
     # Check link_id parameter
-    links = load_links()
-    filtered: list[Link] = list(filter(lambda link: link.id == link_id, links))
+    filtered: list[Link] = list(filter(lambda link: link.id == link_id, LINKS))
 
     assert len(filtered) == 1, f'Link with id={link_id} does not exist in input/links.csv'
     link = filtered[0]
 
     # Check proxy_id parameter
-    proxies = load_proxies()
-    filtered: list[Proxy] = list(filter(lambda proxy: proxy.id == proxy_id, proxies))
+    filtered: list[Proxy] = list(filter(lambda proxy: proxy.id == proxy_id, PROXIES))
 
     assert len(filtered) == 1, f'Proxy with id={link_id} does not exist in input/proxies.csv'
     proxy = filtered[0]
@@ -41,14 +43,11 @@ def run_parser(link_id: str, proxy_id: str):
 def run_parsers():
     """ Starts all parsers for each link from input/links.csv """
 
-    links = load_links()
-    proxies = load_proxies()
-
-    assert len(proxies) >= len(links), 'Number of proxies in input/proxies.csv ' \
+    assert len(PROXIES) >= len(LINKS), 'Number of proxies in input/proxies.csv ' \
                                        'must be more or equal than number of links in input/links.csv'
 
     processes = []
-    for link, proxy in zip(links, proxies):
+    for link, proxy in zip(LINKS, PROXIES):
         process = Process(target=run_parser, args=(link.id, proxy.id))
         processes.append(process)
         process.start()
