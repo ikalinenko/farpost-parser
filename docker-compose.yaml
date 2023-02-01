@@ -4,5 +4,6 @@ services:
   farpost_parser:
     build: .
     container_name: farpost_parser
+    command: python3 main.py
     volumes:
       - /root/farpost:/usr/src/app
