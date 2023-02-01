@@ -249,6 +249,8 @@ class Parser:
     def _send_email_with_attachments(self):
         """ Sends an email with parsed .xml attachments """
 
+        logger.debug(f'Parser {self._id} — Sending an email with parsed .xml files...')
+
         send_email_with_attachments(
             parsed_link=self._base_url,
             paths=[self._disks_filename, self._tires_filename]
