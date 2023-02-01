@@ -5,6 +5,7 @@ import pickle
 import random
 import requests
 import time
+from datetime import datetime
 from typing import Callable
 from shutil import rmtree
 from twocaptcha import TwoCaptcha
@@ -32,6 +33,7 @@ from helpers.parse_html import (
     resolve_captcha_type,
     get_captcha_hidden_inputs
 )
+from helpers.send_email import send_email_with_attachments
 
 
 logger = logging.getLogger(__file__)
@@ -93,15 +95,17 @@ class Parser:
         self._tires: list[Tire] = []  # Tires parsed
         self._disks: list[Disk] = []  # Disks parsed
 
+        now = datetime.now().strftime('%Y%m%d_%H%M')
+        self._tires_filename = os.path.join(BASE_DIR, f'output/{self._id}_{now}_tires.xml')
+        self._disks_filename = os.path.join(BASE_DIR, f'output/{self._id}_{now}_disks.xml')
+
     def __enter__(self):
-        # self._load_session_cookies_if_exists()
         self._load_catalog_links()
         self._load_disks_from_tmp_if_exists()
         self._load_tires_from_tmp_if_exists()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # self._dump_session_cookies()
         self._session.close()
 
         if exc_type:
@@ -111,6 +115,7 @@ class Parser:
         else:
             self._save_disks_to_xml()
             self._save_tires_to_xml()
+            self._send_email_with_attachments()
             rmtree(os.path.join(BASE_DIR, f'tmp/parser_{self._id}'))
 
     def _refresh_session(self) -> None:
@@ -163,23 +168,6 @@ class Parser:
             with open(catalog_links_filename, 'wb') as f:
                 pickle.dump(self._links, f)
 
-    # def _load_session_cookies_if_exists(self) -> None:
-    #     """ Loads cookies for next session if they exists """
-    #
-    #     session_cookies_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/cookies')
-    #
-    #     if os.path.exists(session_cookies_filename):
-    #         with open(session_cookies_filename, 'rb') as f:
-    #             cookies = pickle.load(f)
-    #
-    #         self._session.cookies.update(cookies)
-    #
-    # def _dump_session_cookies(self) -> None:
-    #     session_cookies_filename = os.path.join(BASE_DIR, f'tmp/parser_{self._id}/cookies')
-    #
-    #     with open(session_cookies_filename, 'wb') as f:
-    #         pickle.dump(self._session.cookies, f)
-
     def _load_tires_from_tmp_if_exists(self) -> None:
         """ Loads tires from temporary file if it exists """
 
@@ -229,9 +217,7 @@ class Parser:
 
         logger.debug(f'Parser {self._id} — Saving tires into output xml file...')
 
-        tires_filename = os.path.join(BASE_DIR, f'output/{self._id}_tires.xml')
-
-        with open(tires_filename, 'w') as f:
+        with open(self._tires_filename, 'w') as f:
             f.write(
                 """<?xml version="1.0" encoding="UTF-8"?>
                     <products>
@@ -248,9 +234,7 @@ class Parser:
 
         logger.debug(f'Parser {self._id} — Saving disks into output xml file...')
 
-        disks_filename = os.path.join(BASE_DIR, f'output/{self._id}_disks.xml')
-
-        with open(disks_filename, 'w') as f:
+        with open(self._disks_filename, 'w') as f:
             f.write(
                 """<?xml version="1.0" encoding="UTF-8"?>
                     <products>
@@ -261,6 +245,14 @@ class Parser:
                 f.write(disk.to_xml())
 
             f.write('</products>')
+
+    def _send_email_with_attachments(self):
+        """ Sends an email with parsed .xml attachments """
+
+        send_email_with_attachments(
+            parsed_link=self._base_url,
+            paths=[self._disks_filename, self._tires_filename]
+        )
 
     def _solve_captcha(self, url: str, hidden_s: str, hidden_t: str, image_url: str | None) -> requests.Response:
         """
