@@ -7,7 +7,6 @@ import requests
 import time
 from typing import Callable
 from shutil import rmtree
-from bs4 import BeautifulSoup
 from twocaptcha import TwoCaptcha
 from urllib.parse import urlencode, urljoin
 from user_agent import generate_user_agent
