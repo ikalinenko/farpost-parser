@@ -4,7 +4,6 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from core.settings import (
-    BASE_DIR,
     SMTP_EMAIL_HOST,
     SMTP_EMAIL_PORT,
     SMTP_EMAIL_USER,
@@ -22,6 +21,8 @@ def send_email_with_attachments(parsed_link: str, paths: list[str]) -> None:
         Raises:
             - AssertionError: Invalid `paths` argument
     """
+
+    assert isinstance(paths, list), '`paths` parameter must be a list instance'
 
     message = MIMEMultipart()
     message['To'] = ', '.join(EMAIL_RECIPIENTS)
