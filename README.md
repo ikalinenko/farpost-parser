@@ -8,9 +8,9 @@
     ```bash
     cp .env.example .env
     ```
-2. Создайте 2 директории `input` и `output` в корне проекта:
+2. Создайте 3 директории `input`, `output` и `tmp` в корне проекта:
     ```bash
-    mkdir input output
+    mkdir input output tmp
     ```
 3. Скопируйте `links.example.csv` в `input/links.csv` и и отредактируйте файл `input/links.csv`, заполнив в нем ссылки на каталоги, которые необходимо спарсить:
     ```bash
@@ -20,6 +20,11 @@
     ```bash
     cp proxies.example.csv input/proxies.example.csv
     ```
+
+    ### Капча
+    Для обхода капчи во время парсинга сервиса [FarPost.ru](https://farpost.ru), парсер использует [ruCaptcha](https://rucaptcha.com/), поэтому для работы парсера необходимо зарегистрироваться в сервисе [ruCaptcha](https://rucaptcha.com/), получить `api` ключ и указать его в конфигурации `.env`.
+    ####
+    **!! Важно.** Баланс на [ruCaptcha](https://rucaptcha.com/) всегда должен быть пополнен для поддержания работы парсера.
 
 ## Запуск
 - Через `Docker Compose`:
