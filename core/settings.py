@@ -1,5 +1,6 @@
 import logging
 import os
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from environs import Env
 
@@ -19,10 +20,18 @@ SMTP_EMAIL_PASSWORD = env.str('SMTP_EMAIL_PASSWORD')
 
 EMAIL_RECIPIENTS = env.list('EMAIL_RECIPIENTS')
 
+LOGS_ROTATING_INTERVAL_IN_HOURS = env.int('LOGS_ROTATING_INTERVAL_IN_HOURS')
 
 logging.basicConfig(
     level=logging.DEBUG,
     format='{levelname} {asctime} - {message}',
     style='{',
-    filename=os.path.join(BASE_DIR, 'root.log')
+    handlers=(
+        TimedRotatingFileHandler(
+            filename=os.path.join(BASE_DIR, 'root.log'),
+            when='h',
+            interval=LOGS_ROTATING_INTERVAL_IN_HOURS,
+            backupCount=5
+        ),
+    )
 )
