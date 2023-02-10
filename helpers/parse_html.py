@@ -35,6 +35,7 @@ class Tire:
     frame: str
     availability_of_goods: str
     tire_type: str
+    description: str
 
     def __dict__(self):
         return {
@@ -50,7 +51,8 @@ class Tire:
             'profileHeight': self.profile_height,
             'frame': self.frame,
             'availabilityOfGoods': self.availability_of_goods,
-            'tireType': self.tire_type
+            'tireType': self.tire_type,
+            'description': self.description
         }
 
     @classmethod
@@ -68,7 +70,8 @@ class Tire:
             profile_height=_dict['profileHeight'],
             frame=_dict['frame'],
             availability_of_goods=_dict['availabilityOfGoods'],
-            tire_type=_dict['tireType']
+            tire_type=_dict['tireType'],
+            description=_dict['description']
         )
 
     def to_xml(self):
@@ -86,6 +89,7 @@ class Tire:
             <frame>{self.frame}</frame>
             <availabilityOfGoods>{self.availability_of_goods}</availabilityOfGoods>
             <tireType>{self.tire_type}</tireType>
+            <description>{self.description}</description>
         </Tire>"""
 
 
@@ -103,6 +107,7 @@ class Disk:
     type_of: str
     CH_diameter_DIA: str
     product_availability: str
+    description: str
 
     def __dict__(self):
         return {
@@ -117,7 +122,8 @@ class Disk:
             'DrillingPCD': self.drilling_PCD,
             'TypeOf': self.type_of,
             'CHDiameterDIA': self.CH_diameter_DIA,
-            'ProductAvailability': self.product_availability
+            'ProductAvailability': self.product_availability,
+            'description': self.description
         }
 
     @classmethod
@@ -134,7 +140,8 @@ class Disk:
             drilling_PCD=_dict['DrillingPCD'],
             type_of=_dict['TypeOf'],
             CH_diameter_DIA=_dict['CHDiameterDIA'],
-            product_availability=_dict['ProductAvailability']
+            product_availability=_dict['ProductAvailability'],
+            description=_dict['description']
         )
 
     def to_xml(self):
@@ -151,6 +158,7 @@ class Disk:
             <TypeOf>{self.type_of}</TypeOf>
             <CHDiameterDIA>{self.CH_diameter_DIA}</CHDiameterDIA>
             <ProductAvailability>{self.product_availability}</ProductAvailability>
+            <description>{self.description}</description>
         </Disk>"""
 
 
@@ -266,6 +274,11 @@ def parse_tire(content_to_parse: str) -> Tire:
     availability_of_goods = soup.find('span', {'data-field': 'goodPresentState'}).text
     tire_type = soup.find('span', {'data-field': 'predestination'}).text
 
+    try:
+        description = soup.find('p', {'data-field': 'text'}).text
+    except AttributeError:
+        description = None
+
     return Tire(
         title=_process_parsed_string(title),
         price=price,
@@ -279,7 +292,8 @@ def parse_tire(content_to_parse: str) -> Tire:
         profile_height=_process_parsed_string(profile_height),
         frame=_process_parsed_string(frame),
         availability_of_goods=_process_parsed_string(availability_of_goods),
-        tire_type=_process_parsed_string(tire_type)
+        tire_type=_process_parsed_string(tire_type),
+        description=description
     )
 
 
@@ -346,6 +360,11 @@ def parse_disk(content_to_parse: str) -> Disk:
     except AttributeError:
         product_availability = None
 
+    try:
+        description = soup.find('p', {'data-field': 'text'}).text
+    except AttributeError:
+        description = None
+
     return Disk(
         title=_process_parsed_string(title),
         price=price,
@@ -358,7 +377,8 @@ def parse_disk(content_to_parse: str) -> Disk:
         drilling_PCD=_process_parsed_string(drilling_PCD),
         type_of=_process_parsed_string(type_of),
         CH_diameter_DIA=_process_parsed_string(CH_diameter_DIA),
-        product_availability=_process_parsed_string(product_availability)
+        product_availability=_process_parsed_string(product_availability),
+        description=description
     )
 
 
